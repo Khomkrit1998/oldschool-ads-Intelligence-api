@@ -37,6 +37,10 @@ export const env = {
   db: {
     url: optional("DATABASE_URL", "file:./dev.db"),
   },
+  access: {
+    /** รหัสผ่านส่วนหน้า (gate) ที่ต้องกรอกก่อนเข้าใช้งานเว็บหลัก */
+    code: required("ACCESS_CODE"),
+  },
   server: {
     port: Number(optional("PORT", "4000")),
     frontendOrigin: optional("FRONTEND_ORIGIN", "http://localhost:5173"),

@@ -1,7 +1,14 @@
 import { Router } from "express";
 
+import * as access from "../controllers/access.controller.js";
 import * as fb from "../controllers/facebook.controller.js";
 import * as share from "../controllers/share.controller.js";
+
+/** Gate ส่วนหน้า (ตรวจ access code) — mount ที่ /api/access, ไม่ต้องมี session */
+export const accessRouter = Router();
+accessRouter.get("/status", access.status);
+accessRouter.post("/verify", access.verify);
+accessRouter.post("/lock", access.lock);
 
 /** OAuth flow (เปิดผ่าน browser โดยตรง) — mount ที่ /auth/facebook */
 export const authRouter = Router();
@@ -9,8 +16,9 @@ authRouter.get("/login", fb.login);
 authRouter.get("/callback", fb.callback);
 authRouter.post("/logout", fb.logout);
 
-/** Data API (React เรียกผ่าน axios) — mount ที่ /api/facebook, ต้องมี session */
+/** Data API (React เรียกผ่าน axios) — mount ที่ /api/facebook, ต้องผ่าน gate + มี session */
 export const apiRouter = Router();
+apiRouter.use(access.requireGate);
 apiRouter.use(fb.requireSession);
 apiRouter.get("/profile", fb.getProfile);
 apiRouter.get("/businesses", fb.getBusinesses);

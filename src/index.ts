@@ -8,7 +8,12 @@ import express, {
 
 import { env } from "./config/env.js";
 import { MetaApiError } from "./services/meta-error.js";
-import { apiRouter, authRouter, sharedRouter } from "./routes/facebook.route.js";
+import {
+  accessRouter,
+  apiRouter,
+  authRouter,
+  sharedRouter,
+} from "./routes/facebook.route.js";
 
 const app = express();
 
@@ -25,6 +30,7 @@ app.use(
 
 app.get("/health", (_req: Request, res: Response) => res.json({ ok: true }));
 
+app.use("/api/access", accessRouter);
 app.use("/auth/facebook", authRouter);
 app.use("/api/facebook", apiRouter);
 app.use("/api/shared", sharedRouter);

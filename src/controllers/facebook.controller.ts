@@ -95,6 +95,18 @@ export async function callback(req: Request, res: Response): Promise<void> {
     res.cookie(SID_COOKIE, sid, cookieOptions(SESSION_TTL_MS));
     redirectToFrontend(res, { ok: true });
   } catch (err) {
+    // log สาเหตุจริงจาก Facebook (code/subcode/fbtrace) เพื่อ debug — ไม่ส่งให้ frontend ตรง ๆ
+    if (err instanceof MetaApiError) {
+      console.error("[fb callback] token exchange failed:", {
+        message: err.message,
+        code: err.code,
+        subcode: err.subcode,
+        status: err.status,
+        fbtraceId: err.fbtraceId,
+      });
+    } else {
+      console.error("[fb callback] token exchange failed:", err);
+    }
     const reason = err instanceof MetaApiError ? err.message : "exchange_failed";
     redirectToFrontend(res, { ok: false, reason });
   }
