@@ -1,0 +1,64 @@
+// DB-backed multi-tenant token store
+// SQLite เป็น default (รันได้ทันทีบนเครื่อง) — สลับเป็น Postgres ได้โดยเปลี่ยน
+// provider = "postgresql" และตั้ง DATABASE_URL เป็น connection string ของ Postgres
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+/// ลูกค้า 1 ราย = 1 คน/ระบบที่เชื่อมต่อ Facebook เข้ามา
+/// accessToken ถูก "เข้ารหัส" ก่อนเก็บ (ดู services/token-cipher.ts) — ไม่เก็บ plaintext
+model Customer {
+  id        String    @id @default(cuid())
+  /// id ของผู้เชื่อมต่อจาก Facebook (system user id หรือ user id) — unique กันซ้ำ
+  fbUserId  String    @unique
+  name      String
+  email     String?
+  /// ciphertext ของ access token (System User token สำหรับ assets ที่ลูกค้า grant)
+  tokenEnc  String
+  tokenType String    @default("system_user")
+  expiresAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  sessions   Session[]
+  shareLinks ShareLink[]
+}
+
+/// ลิงก์แชร์ที่ agency สร้างให้ client เปิดดู dashboard ของบัญชีเดียวโดยไม่ต้อง login
+/// ใช้ token ของ customer (agency) ฝั่ง server — client ไม่เห็น token/บัญชีอื่น
+model ShareLink {
+  id          String    @id @default(cuid())
+  /// token สุ่มในลิงก์ (unguessable) ที่ client ใช้เปิดดู
+  token       String    @unique
+  /// agency connection ที่เป็นเจ้าของ + ใช้ token ดึงข้อมูล
+  customerId  String
+  customer    Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  /// บัญชีโฆษณาที่อนุญาตให้ดู (scope) รูปแบบ "act_123"
+  adAccountId String
+  /// ชื่อบัญชี ณ ตอนสร้าง (ไว้โชว์โดยไม่ต้องเรียก Meta)
+  accountName String?
+  label       String?
+  revoked     Boolean   @default(false)
+  expiresAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([customerId])
+}
+
+/// session = แมป sid cookie (httpOnly) -> customer ฝั่ง server
+/// React ถือแค่ sid ไม่เคยเห็น access token
+model Session {
+  id         String    @id
+  customerId String
+  customer   Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  createdAt  DateTime  @default(now())
+  expiresAt  DateTime?
+
+  @@index([customerId])
+}
