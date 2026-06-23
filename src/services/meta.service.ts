@@ -317,59 +317,67 @@ export async function getCampaigns(
 
 /**
  * (9) insights ระดับบัญชี — ยอดรวม + ซีรีส์รายวัน (สำหรับ KPI + กราฟแนวโน้ม)
- * ใช้ call เดียว (time_increment=1) แล้ว "รวมเอง" เป็น totals — ลดจำนวน call ครึ่งหนึ่ง
- * (KPI ใช้แค่ spend/impressions/clicks/ctr ไม่ต้องใช้ reach ที่รวมเองไม่ได้)
+ * - call (ก) แบบ aggregate: ได้ reach/cpm/cpc ที่ "รวมเองไม่ได้" + ผลลัพธ์ (ขาย/ทัก) ตรงจาก Meta
+ * - call (ข) time_increment=1: ซีรีส์รายวันสำหรับกราฟ + sparkline
+ * ยิงขนานกันเพื่อลด latency
  */
 export async function getAdAccountInsights(
   adAccountId: string,
   userAccessToken: string,
   date: DateSpec = {},
 ): Promise<AdAccountInsights> {
-  const res = await graphGetCached<FacebookPaged<FacebookInsights>>(
-    `/${adAccountId}/insights`,
-    {
-      fields: "spend,impressions,clicks,actions",
+  const [aggRes, dailyRes] = await Promise.all([
+    graphGetCached<FacebookPaged<FacebookInsights>>(`/${adAccountId}/insights`, {
+      fields: "spend,impressions,clicks,ctr,reach,cpc,cpm,actions,action_values",
+      access_token: userAccessToken,
+      ...insightsTimeParams(date),
+    }),
+    graphGetCached<FacebookPaged<FacebookInsights>>(`/${adAccountId}/insights`, {
+      fields: "spend,clicks",
       time_increment: 1,
       access_token: userAccessToken,
       ...insightsTimeParams(date),
-    },
-  );
+    }),
+  ]);
 
-  const rows = res.data;
-  const sum = (f: "spend" | "impressions" | "clicks") =>
-    rows.reduce((s, r) => s + Number(r[f] ?? 0), 0);
+  const agg = aggRes.data[0];
+  // "ทัก" = แชทที่เริ่มจากโฆษณา · "ยอดขาย" = จำนวน + มูลค่า purchase
+  const chats = pickAction(agg?.actions, MESSAGING_TYPES);
+  const sales = pickAction(agg?.actions, PURCHASE_TYPES);
+  const salesValue = pickAction(agg?.action_values, PURCHASE_TYPES);
 
-  const spend = sum("spend");
-  const impressions = sum("impressions");
-  const clicks = sum("clicks");
-  const ctr = impressions > 0 ? (clicks / impressions) * 100 : 0;
-  // "ทัก" = จำนวนแชทที่เริ่มจากโฆษณา (รวมข้ามวัน)
-  const chats = rows.reduce((s, r) => s + pickAction(r.actions, MESSAGING_TYPES), 0);
-
-  const totals: FacebookInsights | null = rows.length
+  const totals: FacebookInsights | null = agg
     ? {
-        spend: String(spend),
-        impressions: String(impressions),
-        clicks: String(clicks),
-        ctr: ctr.toFixed(4),
+        spend: agg.spend,
+        impressions: agg.impressions,
+        clicks: agg.clicks,
+        ctr: agg.ctr,
+        reach: agg.reach,
+        cpc: agg.cpc,
+        cpm: agg.cpm,
         actions: [
-          {
-            action_type: "onsite_conversion.messaging_conversation_started_7d",
-            value: String(chats),
-          },
+          { action_type: MESSAGING_RESULT_TYPE, value: String(chats) },
+          { action_type: PURCHASE_RESULT_TYPE, value: String(sales) },
+        ],
+        action_values: [
+          { action_type: PURCHASE_RESULT_TYPE, value: String(salesValue) },
         ],
       }
     : null;
 
   return {
     totals,
-    daily: rows.map((d) => ({
+    daily: dailyRes.data.map((d) => ({
       date: d.date_start ?? "",
       spend: Number(d.spend ?? 0),
       clicks: Number(d.clicks ?? 0),
     })),
   };
 }
+
+/** action_type มาตรฐานที่เราใช้ "คืน" ใน totals (normalize แล้ว) */
+const MESSAGING_RESULT_TYPE = "onsite_conversion.messaging_conversation_started_7d";
+const PURCHASE_RESULT_TYPE = "purchase";
 
 /** action_type ของ "ทัก" (เริ่มบทสนทนา/ข้อความเข้า — เน้น Messenger) */
 const MESSAGING_TYPES = [
