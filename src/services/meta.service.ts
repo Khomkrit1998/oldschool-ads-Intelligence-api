@@ -328,7 +328,7 @@ export async function getAdAccountInsights(
   const res = await graphGetCached<FacebookPaged<FacebookInsights>>(
     `/${adAccountId}/insights`,
     {
-      fields: "spend,impressions,clicks",
+      fields: "spend,impressions,clicks,actions",
       time_increment: 1,
       access_token: userAccessToken,
       ...insightsTimeParams(date),
@@ -343,6 +343,8 @@ export async function getAdAccountInsights(
   const impressions = sum("impressions");
   const clicks = sum("clicks");
   const ctr = impressions > 0 ? (clicks / impressions) * 100 : 0;
+  // "ทัก" = จำนวนแชทที่เริ่มจากโฆษณา (รวมข้ามวัน)
+  const chats = rows.reduce((s, r) => s + pickAction(r.actions, MESSAGING_TYPES), 0);
 
   const totals: FacebookInsights | null = rows.length
     ? {
@@ -350,6 +352,12 @@ export async function getAdAccountInsights(
         impressions: String(impressions),
         clicks: String(clicks),
         ctr: ctr.toFixed(4),
+        actions: [
+          {
+            action_type: "onsite_conversion.messaging_conversation_started_7d",
+            value: String(chats),
+          },
+        ],
       }
     : null;
 
@@ -362,6 +370,13 @@ export async function getAdAccountInsights(
     })),
   };
 }
+
+/** action_type ของ "ทัก" (เริ่มบทสนทนา/ข้อความเข้า — เน้น Messenger) */
+const MESSAGING_TYPES = [
+  "onsite_conversion.messaging_conversation_started_7d",
+  "onsite_conversion.total_messaging_connection",
+  "messaging_conversation_started_7d",
+];
 
 /** action_type ของ "ผลลัพธ์/ยอดขาย" (เน้น purchase สำหรับ ecom) */
 const PURCHASE_TYPES = [
