@@ -200,6 +200,29 @@ export async function exchangeForLongLivedToken(
   });
 }
 
+/** ข้อมูลจาก /debug_token — ใช้ validate + อ่านวันหมดอายุ/scope ของ token ที่วางมา */
+export interface DebugTokenInfo {
+  is_valid: boolean;
+  app_id?: string;
+  user_id?: string;
+  /** epoch "วินาที" (0 = ไม่หมดอายุ) */
+  expires_at?: number;
+  data_access_expires_at?: number;
+  scopes?: string[];
+}
+
+/**
+ * (3.1) ตรวจสอบ access token ที่ผู้ใช้วางเอง (BYO) ด้วย app access token (appId|appSecret)
+ * คืนสถานะ valid + วันหมดอายุ + scope เพื่อ validate ก่อนเก็บ
+ */
+export async function debugToken(inputToken: string): Promise<DebugTokenInfo> {
+  const res = await graphGet<{ data: DebugTokenInfo }>("/debug_token", {
+    input_token: inputToken,
+    access_token: `${env.meta.appId}|${env.meta.appSecret}`,
+  });
+  return res.data;
+}
+
 /** (4) ดึง profile ของ user ที่ login: id, name, email, picture */
 export async function getProfile(
   userAccessToken: string,

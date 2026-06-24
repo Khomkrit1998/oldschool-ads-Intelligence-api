@@ -25,6 +25,9 @@ export interface SessionContext {
   customerId: string;
   userId: string;
   userAccessToken: string;
+  tokenType: string;
+  /** epoch ms ที่ token หมดอายุ (null = ไม่หมด/ไม่ทราบ) */
+  tokenExpiresAt: number | null;
 }
 
 /** upsert customer + token (encrypt ก่อนเก็บ) แล้วคืน customerId */
@@ -89,6 +92,10 @@ export async function getSessionContext(
     customerId: session.customerId,
     userId: session.customer.fbUserId,
     userAccessToken: decryptToken(session.customer.tokenEnc),
+    tokenType: session.customer.tokenType,
+    tokenExpiresAt: session.customer.expiresAt
+      ? session.customer.expiresAt.getTime()
+      : null,
   };
 }
 

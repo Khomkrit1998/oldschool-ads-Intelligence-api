@@ -15,12 +15,15 @@ export const authRouter = Router();
 authRouter.get("/login", fb.login);
 authRouter.get("/callback", fb.callback);
 authRouter.post("/logout", fb.logout);
+// เชื่อมด้วย access token ที่ผู้ใช้วางเอง (หลัง gate, ยังไม่ต้องมี session — เป็นเส้นที่สร้าง session)
+authRouter.post("/token", access.requireGate, fb.connectWithToken);
 
 /** Data API (React เรียกผ่าน axios) — mount ที่ /api/facebook, ต้องผ่าน gate + มี session */
 export const apiRouter = Router();
 apiRouter.use(access.requireGate);
 apiRouter.use(fb.requireSession);
 apiRouter.get("/profile", fb.getProfile);
+apiRouter.get("/session", fb.getConnectionMeta);
 apiRouter.get("/businesses", fb.getBusinesses);
 apiRouter.get("/businesses/:businessId/users", fb.getBusinessUsers);
 apiRouter.get("/adaccounts", fb.getAdAccounts);
